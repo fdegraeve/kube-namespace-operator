@@ -32,6 +32,3 @@ Installation
 kubectl delete -f manifest.yaml
 sh clean_all.sh
 ```
-
-# Development
-[information-for-development](./DEVELOPMENT.md)
