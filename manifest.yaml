@@ -1,0 +1,116 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: kube-namespace-operator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-namespace-operator
+  namespace: kube-namespace-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-namespace-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kube-namespace-operator
+    namespace: kube-namespace-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-namespace-operator
+  namespace: kube-namespace-operator
+data:
+  whitelist.yaml: |-
+    whiteregex:
+        - ^kube
+
+    whitelist:
+        - default
+        - traefik
+        - gatekeeper-system
+        - cert-manager
+        - knative-serving
+        - kourier-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-namespace-operator
+  namespace: kube-namespace-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-namespace-operator
+  template:
+    metadata:
+      labels:
+        app: kube-namespace-operator
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - kube-namespace-operator
+            topologyKey: "kubernetes.io/hostname"
+      serviceAccountName: kube-namespace-operator
+      containers:
+      - image: fdegraeve/kube-namespace-operator:latest
+        name: kube-namespace-operator
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: config-volume
+          mountPath: /operator/config
+        env:
+        - name: QUOTA_JOB
+          value: "200"
+        - name: LIMIT_CPU
+          value: "4"
+        - name: LIMIT_MEMORY
+          value: "4Gi"
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          failureThreshold: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 10
+        resources:
+          requests:
+            memory: 32Mi
+            cpu: 50m
+          limits:
+            memory: 512Mi
+            cpu: 2000m
+      volumes:
+      - name: config-volume
+        configMap:
+          name: kube-namespace-operator

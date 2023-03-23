@@ -1,0 +1,53 @@
+name: Master Workflow - Build and deploy to Docker Hub
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: kube-namespace-operator
+  CI_REGISTRY_USER: fdegraeve
+  CI_REGISTRY: registry.hub.docker.com
+
+jobs:
+  Build:
+    name: Build container
+    runs-on: ubuntu-latest
+    steps:
+      
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Login registry
+        run: |-
+          echo ${{secrets.CI_REGISTRY_PASSWORD}} | docker login ${{env.CI_REGISTRY}} -u ${{env.CI_REGISTRY_USER}} --password-stdin
+
+      - name: Set SOURCE env
+        run: |-
+          echo "SOURCE_BRANCH=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+          echo "SOURCE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Set TAG main
+        run: |-
+          echo "main"
+          echo "TAG_NAME=latest" >> $GITHUB_ENV
+        if: env.SOURCE_BRANCH == 'main'
+
+      - name: Set TAG version
+        run: |-
+          echo "TAG_NAME=${{env.SOURCE_TAG}}" >> $GITHUB_ENV
+        if: env.SOURCE_BRANCH != 'main' && contains(env.SOURCE_BRANCH , 'refs/tags')
+
+      - name: Set TAG branch
+        run: |-
+          echo "TAG_NAME=${{env.SOURCE_BRANCH}}" >> $GITHUB_ENV
+        if: env.SOURCE_BRANCH != 'main' && !contains(env.SOURCE_BRANCH , 'refs/tags')
+
+      - name: Build
+        run: |-
+          docker build --rm --no-cache=true -t "${{env.CI_REGISTRY}}/fdegraeve/${{env.IMAGE_NAME}}:${{env.TAG_NAME}}" .
+      
+      - name: Publish
+        run: |-
+          docker push "${{env.CI_REGISTRY}}/fdegraeve/${{env.IMAGE_NAME}}:${{env.TAG_NAME}}"

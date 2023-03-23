@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: namespace-operator
+spec:
+  podSelector: {}
+  ingress:
+  - from:
+    - podSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          namespace-operator.io/global-access: "true"
+  policyTypes:
+  - Ingress
